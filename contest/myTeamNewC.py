@@ -228,9 +228,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     if len(capsuleList) > 0:
       capDistance = min([self.getMazeDistance(myPos, caps) for caps in capsuleList])
       features['attackCap'] = capDistance
-      # if features['attackCap'] == 1:
-      #   features['distanceToFood'] = 0
-      #   features['stop'] = 10
       if scare > 11:
       # if features['enemyGhost'] > 3:
         features['attackCap'] = 0
@@ -276,7 +273,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 120, 'stop': -150, 'distanceToFood': -3, 'enemyGhost': 200, 'attackCap': -90, 'enemyScared': 3, 'retreat': -15, 'west': -450, 'east': -450, 'north': -450, 'south': -450}
+    return {'successorScore': 120, 'stop': -150, 'distanceToFood': -3, 'enemyGhost': 200, 'attackCap': -90, 'enemyScared': 4, 'retreat': -15, 'west': -450, 'east': -450, 'north': -450, 'south': -450}
   
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -367,8 +364,9 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
       features['onDefense'] = 0
       features['numInvaders'] = 0
       features['invaderDistance'] = 0
-      features['middlePointDistance'] = features['middlePointDistance']/4
       features['reverse'] = 0
+      features['distanceToFood'] = 0
+      features['successorScore'] = 0
     #Changed to offensive
     else:
       features['enemyGhost'] = 0
@@ -380,4 +378,4 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'middlePointDistance': -10, 'enemyGhost': 100, 'distanceToFood': -2, 'successorScore': 80}
+    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'middlePointDistance': -10, 'enemyGhost': 100}

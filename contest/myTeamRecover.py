@@ -292,35 +292,13 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     successor = self.getSuccessor(gameState, action)
     myState = successor.getAgentState(self.index)
     myPos = myState.getPosition()
-    enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
-    ghosts = [a for a in enemies if a.getPosition() != None]
-    foodList = self.getFood(successor).asList()
     scared = False
-    features['successorScore'] = -len(foodList)
     timer = 0
     # #Defensive
     # if scared == False:
 
-    for i in self.getTeam(successor):
-      team = successor.getAgentState(i)
-      timer += team.scaredTimer
     # Computes whether we're on defense (1) or offense (0)
     features['onDefense'] = 1
-
-    if len(foodList) > 0: # This should always be True,  but better safe than sorry
-      minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
-      features['distanceToFood'] = minDistance
-
-    if len(ghosts) > 0:
-      ghostDist = min(self.getMazeDistance(myPos, ghost.getPosition()) for ghost in ghosts)
-      features['enemyGhost'] = ghostDist
-      if features['enemyGhost'] > 3: 
-        features['enemyGhost'] = 0
-      elif features['enemyGhost'] < 3:
-        features['distanceToFood'] = features['distanceToFood']/2
-    else: 
-      features['enemyGhost'] = 0
-
     if myState.isPacman: features['onDefense'] = 0
 
     # Computes distance to invaders we can see
@@ -360,24 +338,19 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
       distToMiddle = [self.getMazeDistance(myPos, a) for a in self.boundary]
       features['middlePointDistance'] = min(distToMiddle)
 
-
-  
     #If we're scared turn into Offensive Agent
-    if timer > 2:
+    if myState.scaredTimer > 0:
       features['onDefense'] = 0
-      features['numInvaders'] = 0
-      features['invaderDistance'] = 0
-      features['middlePointDistance'] = features['middlePointDistance']/4
-      features['reverse'] = 0
+      scared = True
+
     #Changed to offensive
     else:
-      features['enemyGhost'] = 0
-      features['distanceToFood'] = 0
-      features['successorScore'] = 0
-
+      if timer == 40:
+        timer = 0
+        scared = False
 
     #Return    
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'middlePointDistance': -10, 'enemyGhost': 100, 'distanceToFood': -2, 'successorScore': 80}
+    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'middlePointDistance': -10}

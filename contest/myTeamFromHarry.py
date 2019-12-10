@@ -1,5 +1,5 @@
-# baselineTeam.py
-# ---------------
+# myTeam.py
+# ---------
 # Licensing Information:  You are free to use or extend these projects for
 # educational purposes provided that (1) you do not distribute or publish
 # solutions, (2) you retain this notice, and (3) you provide clear
@@ -12,17 +12,8 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-# baselineTeam.py
-# ---------------
-# Licensing Information: Please do not distribute or publish solutions to this
-# project. You are free to use and extend these projects for educational
-# purposes. The Pacman AI projects were developed at UC Berkeley, primarily by
-# John DeNero (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
-# For more info, see http://inst.eecs.berkeley.edu/~cs188/sp09/pacman.html
-
 from captureAgents import CaptureAgent
-import distanceCalculator
-import random, time, util, sys
+import random, time, util
 from game import Directions
 import game
 from util import nearestPoint
@@ -47,21 +38,68 @@ def createTeam(firstIndex, secondIndex, isRed,
   any extra arguments, so you should make sure that the default
   behavior is what you want for the nightly contest.
   """
+
+  # The following line is an example only; feel free to change it.
   return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
 ##########
 # Agents #
 ##########
 
+# class DummyAgent(CaptureAgent):
+#   """
+#   A Dummy agent to serve as an example of the necessary agent structure.
+#   You should look at baselineTeam.py for more details about how to
+#   create an agent as this is the bare minimum.
+#   """
+
+#   def registerInitialState(self, gameState):
+#     """
+#     This method handles the initial setup of the
+#     agent to populate useful fields (such as what team
+#     we're on).
+
+#     A distanceCalculator instance caches the maze distances
+#     between each pair of positions, so your agents can use:
+#     self.distancer.getDistance(p1, p2)
+
+#     IMPORTANT: This method may run for at most 15 seconds.
+#     """
+
+#     '''
+#     Make sure you do not delete the following line. If you would like to
+#     use Manhattan distances instead of maze distances in order to save
+#     on initialization time, please take a look at
+#     CaptureAgent.registerInitialState in captureAgents.py.
+#     '''
+#     CaptureAgent.registerInitialState(self, gameState)
+
+#     '''
+#     Your initialization code goes here, if you need any.
+#     '''
+
+
+#   def chooseAction(self, gameState):
+#     """
+#     Picks among actions randomly.
+#     """
+#     actions = gameState.getLegalActions(self.index)
+
+#     '''
+#     You should change this in your own agent.
+#     '''
+
+#     return random.choice(actions)
+
+
 class ReflexCaptureAgent(CaptureAgent):
   """
   A base class for reflex agents that chooses score-maximizing actions
   """
- 
   def registerInitialState(self, gameState):
     self.start = gameState.getAgentPosition(self.index)
     CaptureAgent.registerInitialState(self, gameState)
-
+    
   def chooseAction(self, gameState):
     """
     Picks among the actions with the highest Q(s,a).
@@ -136,29 +174,90 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
   def getFeatures(self, gameState, action):
     features = util.Counter()
     successor = self.getSuccessor(gameState, action)
-    foodList = self.getFood(successor).asList()    
+    foodList = self.getFood(successor).asList()
+    foodAte = successor.getAgentState(self.index).numCarrying 
+    capsuleList  = self.getCapsules(successor)
+    if action == Directions.STOP: features['stop'] = 1
     features['successorScore'] = -len(foodList)#self.getScore(successor)
-    enemies1 = [successor.getAgentState(i) for i in self.getOpponents(successor)]
-    ghosts1 = [a for a in enemies1 if not a.isPacman and a.getPosition() != None]
-    if len(ghosts1) > 0:
-      myPos = successor.getAgentState(self.index).getPosition()
-      features['enemyGhost1'] = min(self.getMazeDistance(myPos, ghost.getPosition()) for ghost in ghosts1)
-    else: 
-      features['enemyGhost1'] = 0
-    
-    if features['enemyGhost1'] > 3: 
-        features['enemyGhost1'] = 0
-    # Compute distance to the nearest food
+    scare = 0
+    middlePointDistance = 0
 
+    myState = successor.getAgentState(self.index)
+    myPos = myState.getPosition()
+
+    enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
+    ghosts = [a for a in enemies if not a.isPacman and a.getPosition() != None]
+
+    # Compute distance to the nearest food
     if len(foodList) > 0: # This should always be True,  but better safe than sorry
-      myPos = successor.getAgentState(self.index).getPosition()
       minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
       features['distanceToFood'] = minDistance
+    
+    # Compute distance to ghost
+    if len(ghosts) > 0:
+      features['enemyGhost'] = min(self.getMazeDistance(myPos, ghost.getPosition()) for ghost in ghosts)
+      if features['enemyGhost'] > 3: 
+        features['enemyGhost'] = 0
+      elif features['enemyGhost'] < 3:
+        features['distanceToFood'] = features['distanceToFood']/2
+    else: 
+      features['enemyGhost'] = 0
+    
+    #Scared enemy
+    for i in self.getOpponents(successor):
+      enemy = successor.getAgentState(i)
+      scare += enemy.scaredTimer
+    features['enemyScared'] = scare
+    if scare > 7: 
+      features['enemyGhost'] = 0;
+      features['enemyScared'] = 0
+    elif scare < 3:
+      features['enemyScared'] = 5;
+    else:
+      features['enemyScared'] = -features['enemyScared']
+      features['enemyGhost'] = -features['enemyGhost']
+
+    #Aim Capsule
+    if len(capsuleList) > 0:
+      capDistance = min([self.getMazeDistance(myPos, caps) for caps in capsuleList])
+      features['attackCap'] = capDistance
+      if scare > 11:
+      # if features['enemyGhost'] > 3:
+        features['attackCap'] = 0
+    
+    # Distance to middle Point
+    self.boundary = []
+    x = 0
+    y = 0
+    if self.red:
+      x = ((gameState.data.layout.width - 2) / 2) - 2
+    else:
+      x = ((gameState.data.layout.width - 2) / 2) + 1
+    for i in range(1, gameState.data.layout.height - 1):
+      if not gameState.hasWall(x, i):
+        self.boundary.append((x, i))
+    middlePoint = (x,y)
+    if len(self.boundary) != 0:
+      distToMiddle = [self.getMazeDistance(successor.getAgentState(self.index).getPosition(), a) for a in self.boundary]
+      middlePointDistance = min(distToMiddle)
+    else:
+      middlePointDistance = 0
+
+    # Retreat
+    if foodAte > 4:
+      features['retreat'] = middlePointDistance + 1
+      #features['successorScore'] = 0
+      features['distanceToFood'] = 0
+      features['attackCap'] = 0
+      features['enemyScared'] = 0
+    else:
+      features['retreat'] = 1  
+
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -1, 'enemyGhost1': 200}
-
+    return {'successorScore': 120, 'stop': -130, 'distanceToFood': -3, 'enemyGhost': 200, 'attackCap': -13, 'enemyScared': 3, 'retreat': -15}
+  
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
   A reflex agent that keeps its side Pacman-free. Again,
@@ -166,13 +265,17 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
   could be like.  It is not the best or only way to make
   such an agent.
   """
-
   def getFeatures(self, gameState, action):
+
+    #Variables
     features = util.Counter()
     successor = self.getSuccessor(gameState, action)
-
     myState = successor.getAgentState(self.index)
     myPos = myState.getPosition()
+    scared = False
+    timer = 0
+    # #Defensive
+    # if scared == False:
 
     # Computes whether we're on defense (1) or offense (0)
     features['onDefense'] = 1
@@ -190,7 +293,44 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
     if action == rev: features['reverse'] = 1
 
+    #Edits
+    #Calculates the border and prioritizes going there
+    self.boundary = []
+    if len(invaders) == 0:
+      x = 0
+      y = 0
+      if self.red:
+        x = (gameState.data.layout.width - 2) / 2
+      else:
+        x = ((gameState.data.layout.width - 2) / 2) + 1
+      # while y == 0:
+      #   for i in range(1, gameState.data.layout.height - 1):
+      #     if not gameState.hasWall(x, (gameState.data.layout.height/2) - i):
+      #       y = (gameState.data.layout.height/2) - i
+      #     elif not gameState.hasWall(x, (gameState.data.layout.height/2) + i):
+      #       y = (gameState.data.layout.height/2) + i
+      #     else:
+      #       continue
+      for i in range(1, gameState.data.layout.height - 1):
+            if not gameState.hasWall(x, i):
+                self.boundary.append((x, i))
+      middlePoint = (x,y)
+      distToMiddle = [self.getMazeDistance(myPos, a) for a in self.boundary]
+      features['middlePointDistance'] = min(distToMiddle)
+
+    #If we're scared turn into Offensive Agent
+    if myState.scaredTimer > 0:
+      features['onDefense'] = 0
+      scared = True
+
+    #Changed to offensive
+    else:
+      if timer == 40:
+        timer = 0
+        scared = False
+
+    #Return    
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2}
+    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'middlePointDistance': -10}
